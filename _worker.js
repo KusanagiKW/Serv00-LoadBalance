@@ -2,9 +2,11 @@ export default {
   async fetch(request, env, ctx) {
     // 获取服务器列表（每行一个服务器）
     const servers = env.SERVERS.split('\n').map(s => s.trim()).filter(Boolean);
-    let lastSuccessfulServer = null; // 用于存储上次成功的服务器
-    const MAX_RETRY = 2; // 设置最大重试次数为2
-    let timeout = 5000; // 初始超时设置为5秒
+    let lastSuccessfulServer = null;
+
+    // 从环境变量获取最大重试次数和超时，提供默认值
+    const MAX_RETRY = parseInt(env.MAX_RETRY, 10) || 2; // 默认最大重试次数为2
+    let timeout = parseInt(env.TIMEOUT, 10) || 5000; // 默认超时设置为5秒
 
     function murmurHash3(key) {
       let h = 0xdeadbeef;
