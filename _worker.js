@@ -3,6 +3,8 @@ export default {
     // 获取服务器列表（每行一个服务器）
     const servers = env.SERVERS.split('\n').map(s => s.trim()).filter(Boolean);
     let lastSuccessfulServer = null; // 用于存储上次成功的服务器
+    const MAX_RETRY = 2; // 设置最大重试次数为2
+    let timeout = 5000; // 初始超时设置为5秒
 
     function murmurHash3(key) {
       let h = 0xdeadbeef;
@@ -27,18 +29,37 @@ export default {
       }
     }
 
+    // 带缓存的 fetch
+    async function fetchWithCache(request, url) {
+      const cache = caches.default; // 使用默认缓存
+      const cachedResponse = await cache.match(request);
+
+      if (cachedResponse) {
+        return cachedResponse; // 返回缓存结果，避免重复请求
+      }
+
+      // 向服务器发出请求
+      const response = await fetchWithTimeout(request, url, timeout);
+
+      // 仅在成功时缓存响应
+      if (response.ok) {
+        ctx.waitUntil(cache.put(request, response.clone())); // 缓存结果
+      }
+
+      return response;
+    }
+
     try {
       const ip = request.headers.get('cf-connecting-ip') || 'default-ip';
       const hash = murmurHash3(ip);
       let url = new URL(request.url);
       const initialServerIndex = hash % servers.length;
-      let timeout = 5000; // 初始超时为5秒
 
       // 优先使用上次成功的服务器
       if (lastSuccessfulServer) {
         try {
           url.hostname = lastSuccessfulServer;
-          const response = await fetchWithTimeout(request, url, timeout);
+          const response = await fetchWithCache(request, url); // 使用带缓存的 fetch
           return response; // 如果上次成功服务器可用，直接返回响应
         } catch (error) {
           console.error('Last successful server failed:', lastSuccessfulServer, error);
@@ -46,12 +67,12 @@ export default {
       }
 
       // 如果上次成功服务器不可用，依次轮询其他服务器
-      for (let i = 0; i < servers.length; i++) {
+      for (let i = 0; i < servers.length && i < MAX_RETRY; i++) {
         const currentServerIndex = (initialServerIndex + i) % servers.length;
         url.hostname = servers[currentServerIndex];
 
         try {
-          const response = await fetchWithTimeout(request, url, timeout);
+          const response = await fetchWithCache(request, url); // 使用带缓存的 fetch
           lastSuccessfulServer = servers[currentServerIndex]; // 更新上次成功服务器
           return response; // 返回成功的响应
         } catch (error) {
