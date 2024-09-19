@@ -1,13 +1,7 @@
 export default {
   async fetch(request, env, ctx) {
-    const servers = [
-      's4argo.slay.us.kg',
-      's8argo.slay.us.kg',
-      's9argo.slay.us.kg',
-      's10argo.slay.us.kg',
-      's11argo.slay.us.kg',
-      's12argo.slay.us.kg'
-    ];
+    // 从环境变量中获取服务器列表，并按换行符分割成数组
+    const servers = env.SERVERS.split('\n').map(s => s.trim()).filter(Boolean);
 
     function murmurHash3(key) {
       let h = 0xdeadbeef;
