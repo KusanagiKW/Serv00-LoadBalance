@@ -24,6 +24,17 @@ export default {
       try {
         const response = await fetch(new Request(url, request), { signal: controller.signal });
         clearTimeout(timeoutId);
+
+        // 如果返回404，视为可用
+        if (response.status === 404) {
+          return response; // 返回成功响应
+        }
+
+        // 如果状态码不是 2xx 且不是 404，抛出错误
+        if (!response.ok) {
+          throw new Error(`Request failed with status: ${response.status}`);
+        }
+
         return response;
       } catch (error) {
         clearTimeout(timeoutId);
@@ -44,7 +55,7 @@ export default {
       const response = await fetchWithTimeout(request, url, timeout);
 
       // 仅在成功时缓存响应
-      if (response.ok) {
+      if (response.ok || response.status === 404) {
         ctx.waitUntil(cache.put(request, response.clone())); // 缓存结果
       }
 
@@ -80,6 +91,9 @@ export default {
         } catch (error) {
           console.error('Server failed:', servers[currentServerIndex], error);
           timeout *= 2; // 每次失败后增加超时（指数退避策略）
+
+          // 等待一段时间再重试
+          await new Promise(resolve => setTimeout(resolve, 1000 * i)); // 根据失败次数增加等待时间
         }
       }
 
