@@ -24,7 +24,13 @@ export default {
       try {
         const response = await fetch(new Request(url, request), { signal: controller.signal });
         clearTimeout(timeoutId);
-        return response;
+        
+        // 如果状态码是 404，表示可用
+        if (response.status === 404) {
+          return response;
+        } else {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
       } catch (error) {
         clearTimeout(timeoutId);
         throw error;
@@ -44,7 +50,7 @@ export default {
       const response = await fetchWithTimeout(request, url, timeout);
 
       // 仅在成功时缓存响应
-      if (response.ok) {
+      if (response.status === 404) { // 仅当状态码为 404 时缓存
         ctx.waitUntil(cache.put(request, response.clone())); // 缓存结果
       }
 
