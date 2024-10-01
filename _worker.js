@@ -21,25 +21,47 @@ function getNextServer(servers) {
   return servers[serverIndex];
 }
 
+// 检查服务器是否可以成功访问 ChatGPT
+async function canAccessChatGPT(server) {
+  const testUrl = `https://${server}`; // 假设 ChatGPT 可用此 URL 访问
+  try {
+    const response = await fetch(testUrl, { method: 'HEAD', cf: { cacheEverything: true } });
+    return response.ok; // 如果返回状态码 200 或其他成功状态码
+  } catch (error) {
+    console.error(`Failed to access ChatGPT via ${server}:`, error);
+    return false; // 请求失败则返回 false
+  }
+}
+
 // 并行模式：对所有服务器发起请求，返回第一个成功的响应
 async function fetchInParallel(request, servers) {
-  const promises = servers.map(server => {
-    let url = new URL(request.url);
-    url.hostname = server;
+  const promises = servers.map(async server => {
+    let canAccess = true; // 默认可以访问
 
-    // 克隆请求，保留 body，避免多次读取 body
-    let newRequest = new Request(url.toString(), {
-      method: request.method,
-      headers: request.headers,
-      body: request.clone().body,
-      redirect: request.redirect
-    });
+    // 仅当目标 URL 包含 ChatGPT 时检查服务器可用性
+    if (request.url.includes("chatgpt.com")) {
+      canAccess = await canAccessChatGPT(server); // 检查服务器是否可以访问 ChatGPT
+    }
 
-    // 发出请求，并捕获失败的情况
-    return fetch(newRequest).catch(err => {
-      console.error(`Server ${server} failed:`, err);
-      return null; // 如果请求失败，返回 null
-    });
+    if (canAccess) {
+      let url = new URL(request.url);
+      url.hostname = server;
+
+      // 克隆请求，保留 body，避免多次读取 body
+      let newRequest = new Request(url.toString(), {
+        method: request.method,
+        headers: request.headers,
+        body: request.clone().body,
+        redirect: request.redirect
+      });
+
+      // 发出请求，并捕获失败的情况
+      return fetch(newRequest).catch(err => {
+        console.error(`Server ${server} failed:`, err);
+        return null; // 如果请求失败，返回 null
+      });
+    }
+    return null; // 如果不能访问 ChatGPT，返回 null
   });
 
   // 使用 Promise.any() 并行请求，选择第一个成功响应的结果
@@ -59,8 +81,27 @@ async function handleRequest(request, env) {
 
   if (mode === 1) {
     // 轮询模式
+    let validServer = null;
+
+    // 查找可以访问 ChatGPT 的服务器（仅在请求 URL 为 ChatGPT 时）
+    if (request.url.includes("chatgpt.com")) {
+      for (const server of servers) {
+        if (await canAccessChatGPT(server)) {
+          validServer = server; // 找到可用的服务器
+          break;
+        }
+      }
+    } else {
+      // 如果不是访问 ChatGPT，直接使用轮询选择的服务器
+      validServer = getNextServer(servers);
+    }
+
+    if (!validServer) {
+      return new Response('No valid server to access ChatGPT', { status: 502 }); // 如果没有可用的服务器，返回502
+    }
+
     let url = new URL(request.url);
-    url.hostname = getNextServer(servers); // 使用轮询选择服务器
+    url.hostname = validServer; // 使用可用服务器
 
     // 克隆请求，保留 body，避免多次读取 body
     let newRequest = new Request(url.toString(), {
@@ -79,8 +120,8 @@ async function handleRequest(request, env) {
       return response; // 返回第一个成功的响应
     }
 
-    return new Response('All servers failed', { status: 502 }); // 如果所有服务器都失败，返回 502 错误
+    return new Response('All servers failed to access ChatGPT', { status: 502 }); // 如果所有服务器都失败，返回502错误
   } else {
-    return new Response('Invalid mode configuration', { status: 400 }); // 如果环境变量设置无效，返回 400 错误
+    return new Response('Invalid mode configuration', { status: 400 }); // 如果环境变量设置无效，返回400错误
   }
 }
