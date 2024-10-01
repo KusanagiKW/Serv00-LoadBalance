@@ -4,15 +4,12 @@ export default {
   }
 }
 
-let cachedServers = null; // 用于缓存服务器列表
-let serverIndex = 0; // 记录当前的服务器索引
+// 记录当前的服务器索引
+let serverIndex = 0;
 
-// 获取并缓存服务器列表
+// 每次从环境变量获取服务器列表
 function getServers(env) {
-  if (!cachedServers) {
-    cachedServers = env.SERVERS.split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  return cachedServers;
+  return env.SERVERS.split('\n').map(s => s.trim()).filter(Boolean);
 }
 
 // 轮询选择服务器
@@ -48,7 +45,7 @@ async function fetchInParallel(request, servers) {
 
 // 处理请求
 async function handleRequest(request, env) {
-  const servers = getServers(env); // 获取缓存的服务器列表
+  const servers = getServers(env); // 每次从环境变量获取服务器列表
 
   if (servers.length === 0) {
     return new Response('No servers configured', { status: 500 }); // 如果服务器列表为空，返回错误
