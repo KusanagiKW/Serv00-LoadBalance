@@ -6,7 +6,7 @@
 
 # 使用说明
 
-使用Workers/Pages连接Github 的方法部署均可；绑定自定义域后，使用这个自定义域代替伪装域名和SNI
+使用Workers/Pages连接Github 的方法部署均可；绑定自定义域后，使用这个自定义域代替伪装域名和SNI，节点的uuid需要相同
 
 ## 功能
 
